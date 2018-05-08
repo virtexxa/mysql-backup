@@ -24,7 +24,6 @@ sub _config {
 		# system programs
 		'mysqldump'	=> '/usr/bin/mysqldump',
 		'gzip'		=> '/bin/gzip',
-		'pwd'		=> '/bin/pwd',
 		'rm'		=> '/bin/rm',
 		'df'		=> '/bin/df',
 		'mount'		=> 'sda1,root,xvda1', # additional names for mountpoints can be added
@@ -208,7 +207,7 @@ sub get_custom_config {
 
 	my $config = shift;
 
-	my $pwd = `$config->{'pwd'}`;
+	my $pwd = "$config->{'root_path'}/mysql-backup";
 	chomp($pwd);
 
 	if(!-e "$pwd/custom-config") {
