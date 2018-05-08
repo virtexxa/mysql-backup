@@ -24,23 +24,27 @@ sub _config {
 		# system programs
 		'mysqldump'	=> '/usr/bin/mysqldump',
 		'gzip'		=> '/bin/gzip',
+		'pwd'		=> '/bin/pwd',
 		'rm'		=> '/bin/rm',
 		'df'		=> '/bin/df',
 		'mount'		=> 'sda1,root,xvda1', # additional names for mountpoints can be added
  
 		# how long to keep backups // each database who should be backed up must be defined here
-		'keep_days'	=> {
-			'default'       => 5,
+		# keep days are now in an external file "custom-config"
+		#'keep_days'	=> {
+		#	'default'       => 5,
 			#'wordpress'	=> 5, # directory must exist
 			#'databasename2'	=> 2, # directory must exist
 			# for other database values you need to write the name of the database as key and the value in days
-		},
+		#},
 	);
- 
+
+	$conf{'keep_days'} = get_custom_config(\%conf);
  
 	return(\%conf);
  
 }
+
  
 my ($arg) = @ARGV;
  
@@ -68,6 +72,8 @@ if($arg ne "run" && $arg ne "check") {
         print "Aborted.\n";
         exit;
 }
+
+
 my $backup = create_backups(_config());
 my $remove_old_backups = delete_backups(_config());
 
@@ -187,7 +193,7 @@ sub disk_status {
 	foreach my $line (@status) {
 		if($line =~ /$mount/) {
 			my($filesystem,$size,$used,$avail,$use,$mounted) = split(/\s+/, $line);
-			my $used = $use;
+			$used = $use;
 			$used =~ s/\%$//;
 			return("Info: Diskspace $size: in use: $use -> Free: $avail") if($used < 80);
 			return("Notice: Diskspace $size: in use: $use -> Free: $avail") if($used >= 80 && $used < 87);
@@ -198,6 +204,37 @@ sub disk_status {
 
 }
  
+sub get_custom_config {
+
+	my $config = shift;
+
+	my $pwd = `$config->{'pwd'}`;
+	chomp($pwd);
+
+	if(!-e "$pwd/custom-config") {
+		open(C, ">$pwd/custom-config") or die "cannot create $pwd/custom-config\n";
+		print C "[keep-days]\n";
+		print C "\n# Databasename Days to keep\n#Example:\n#wordpress   5\n\n";
+		close(C);
+		print "custom configuration was not found.\n";
+		print "The file custom-config has been created first.\n";
+		print "Please configure the file, or if you just use the defaults, start the script again.\n";
+		exit;
+	} else {
+
+		my $custom_config;
+		open(C, "<$pwd/custom-config");
+		while (<C>) {
+			next if($_ eq "\n" || $_ =~ /^\#/ || $_ =~ /\[keep\-days\]/);	
+			my ($dbname, $days) = split(/\s+/, $_);
+			chomp($days);
+			$custom_config->{"$dbname"} = $days;
+		}
+
+		return($custom_config);
+	}
+
+}
  
 sub _convert_unixtime_to_date {
  
