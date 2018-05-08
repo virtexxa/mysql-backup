@@ -26,12 +26,12 @@ sub _config {
 		'gzip'		=> '/bin/gzip',
 		'rm'		=> '/bin/rm',
 		'df'		=> '/bin/df',
-		'mount'		=> 'sda1',
+		'mount'		=> 'sda1,root,xvda1', # additional names for mountpoints can be added
  
 		# how long to keep backups // each database who should be backed up must be defined here
 		'keep_days'	=> {
-			'default'       => 3,
-			'wordpress'	=> 5, # directory must exist
+			'default'       => 5,
+			#'wordpress'	=> 5, # directory must exist
 			#'databasename2'	=> 2, # directory must exist
 			# for other database values you need to write the name of the database as key and the value in days
 		},
@@ -68,21 +68,38 @@ if($arg ne "run" && $arg ne "check") {
         print "Aborted.\n";
         exit;
 }
- 
 my $backup = create_backups(_config());
-print "\n";
 my $remove_old_backups = delete_backups(_config());
+
+print "Backup creation:\n";
+print "================\n\n";
+print $backup if($backup);
+print "No backup will be created.\n" if(!$backup && $arg eq "check");
+print "No backup to create.\n" if(!$backup && $arg eq "run");
+print "\n";
+if($remove_old_backups) {
+	print "Backup clearup:\n";
+	print "===============\n\n";
+	print "This backups will be deleted:\n" if($arg eq "checked");
+	print $remove_old_backups;
+} else {
+	print "No backups found to remove.\n";
+}
+
+print "\n" . disk_status(_config()) . "\n";
  
 sub create_backups {
  
 	my $conf = shift;
+
+	my $output;
  
 	opendir(DIR, "$conf->{'root_path'}");
 	my @dbs = readdir(DIR);
 	closedir(DIR);
  
 	foreach my $db (@dbs) {
-		next if($db eq "." || $db eq ".." || $db eq "$conf->{'myscriptname'}" || $db eq "_disabled" || eq "mysql-backup");
+		next if($db eq "." || $db eq ".." || $db eq "$conf->{'myscriptname'}" || $db eq "_disabled" || $db eq "mysql-backup");
  
 		#print $db ."\n";
 		my $filedate = _convert_unixtime_to_date();
@@ -90,24 +107,27 @@ sub create_backups {
 		next if($result =~ /Got error: 1049/);
 		qx~$conf->{'gzip'} $conf->{'root_path'}/$db/db_backup.$filedate.sql~ if($arg eq "run");
 		if($arg eq "check") {
-		 	 print "Backup /$db/db_backup.$filedate.sql will be created.\n";
+		 	 $output = "Backup /$db/db_backup.$filedate.sql will be created.\n";
 		}		
 		if($arg eq "run") {
-			print "Backup created: $db/db_backup.$filedate.sql\n";
+			$output = "Backup created: $db/db_backup.$filedate.sql\n";
 		}
 	}
+	return($output);
 }
  
 sub delete_backups {
  
 	my $conf = shift;
+
+	my $output;
  
 	opendir(DIR, "$conf->{'root_path'}");
         my @dbs = readdir(DIR);
         closedir(DIR);
  
 	foreach my $db (@dbs) {
-		next if($db eq "." || $db eq ".." || $db eq "$conf->{'myscriptname'}" || $db eq "_disabled");
+		next if($db eq "." || $db eq ".." || $db eq "$conf->{'myscriptname'}" || $db eq "_disabled" || $db eq "mysql-backup");
  
 		my $keep_days = $conf->{'keep_days'}->{'default'};
 		$keep_days = $conf->{'keep_days'}->{$db} if($conf->{'keep_days'}->{$db});
@@ -138,17 +158,15 @@ sub delete_backups {
 				}
 				next if($keep);
 				qx~$conf->{'rm'} $conf->{'root_path'}/$db/$backup~ if($arg eq "run");
-				print "will be deleted: $conf->{'root_path'}/$db/$backup\n" if($arg eq "check");
-				print "Backup deleted: $db/$backup\n" if($arg eq "run");
+				$output = "will be deleted: $conf->{'root_path'}/$db/$backup\n" if($arg eq "check");
+				$output = "Backup deleted: $db/$backup\n" if($arg eq "run");
 			}	
  
 		}
  
 	}
+	return($output);
 }
-
-print "\n" . disk_status(_config()) . "\n";
-
 
 sub disk_status {
 
@@ -157,9 +175,14 @@ sub disk_status {
 	my $diskstatus = `$config->{'df'} -h`;
 
 	my @status = split("\n", $diskstatus);
+	my @mounts = split("\,", $config->{'mount'});
 	
 	foreach my $line (@status) {
-		if($line =~ /$config->{'mount'}/) {
+		my $mount;
+		foreach my $m (@mounts) {
+			$mount = $m if($line =~ /$m/);
+		}
+		if($line =~ /$mount/) {
 			my($filesystem,$size,$used,$avail,$use,$mounted) = split(/\s+/, $line);
 			my $used = $use;
 			$used =~ s/\%$//;
