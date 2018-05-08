@@ -84,7 +84,7 @@ print "No backup will be created.\n" if(!$backup && $arg eq "check");
 print "No backup to create.\n" if(!$backup && $arg eq "run");
 print "\n";
 if($remove_old_backups) {
-	print "Backup clearup:\n";
+	print "Backup cleanup:\n";
 	print "===============\n\n";
 	print "This backups will be deleted:\n" if($arg eq "checked");
 	print $remove_old_backups;
