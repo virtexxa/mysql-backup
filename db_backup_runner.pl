@@ -107,10 +107,10 @@ sub create_backups {
 		next if($result =~ /Got error: 1049/);
 		qx~$conf->{'gzip'} $conf->{'root_path'}/$db/db_backup.$filedate.sql~ if($arg eq "run");
 		if($arg eq "check") {
-		 	 $output = "Backup /$db/db_backup.$filedate.sql will be created.\n";
+		 	 $output .= "Backup /$db/db_backup.$filedate.sql will be created.\n";
 		}		
 		if($arg eq "run") {
-			$output = "Backup created: $db/db_backup.$filedate.sql\n";
+			$output .= "Backup created: $db/db_backup.$filedate.sql\n";
 		}
 	}
 	return($output);
@@ -158,8 +158,8 @@ sub delete_backups {
 				}
 				next if($keep);
 				qx~$conf->{'rm'} $conf->{'root_path'}/$db/$backup~ if($arg eq "run");
-				$output = "will be deleted: $conf->{'root_path'}/$db/$backup\n" if($arg eq "check");
-				$output = "Backup deleted: $db/$backup\n" if($arg eq "run");
+				$output .= "will be deleted: $conf->{'root_path'}/$db/$backup\n" if($arg eq "check");
+				$output .= "Backup deleted: $db/$backup\n" if($arg eq "run");
 			}	
  
 		}
@@ -176,12 +176,15 @@ sub disk_status {
 
 	my @status = split("\n", $diskstatus);
 	my @mounts = split("\,", $config->{'mount'});
+
+	my $mount;
+        foreach my $m (@mounts) {
+		foreach my $line (@status) {
+        		$mount = $m if($line =~ /$m/);
+		}
+        }
 	
 	foreach my $line (@status) {
-		my $mount;
-		foreach my $m (@mounts) {
-			$mount = $m if($line =~ /$m/);
-		}
 		if($line =~ /$mount/) {
 			my($filesystem,$size,$used,$avail,$use,$mounted) = split(/\s+/, $line);
 			my $used = $use;
