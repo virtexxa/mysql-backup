@@ -82,7 +82,7 @@ sub create_backups {
 	closedir(DIR);
  
 	foreach my $db (@dbs) {
-		next if($db eq "." || $db eq ".." || $db eq "$conf->{'myscriptname'}" || $db eq "_disabled" || eq "sbin");
+		next if($db eq "." || $db eq ".." || $db eq "$conf->{'myscriptname'}" || $db eq "_disabled" || eq "mysql-backup");
  
 		#print $db ."\n";
 		my $filedate = _convert_unixtime_to_date();
