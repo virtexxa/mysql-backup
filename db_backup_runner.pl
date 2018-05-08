@@ -214,7 +214,7 @@ sub get_custom_config {
 	if(!-e "$pwd/custom-config") {
 		open(C, ">$pwd/custom-config") or die "cannot create $pwd/custom-config\n";
 		print C "[keep-days]\n";
-		print C "\n# Databasename Days to keep\n#Example:\n#wordpress   5\n\n";
+		print C "\n# Databasename Days to keep\n#Example:\n#wordpress   5\n\ndefault   3\n";
 		close(C);
 		print "custom configuration was not found.\n";
 		print "The file custom-config has been created first.\n";
