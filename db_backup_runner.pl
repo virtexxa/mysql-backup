@@ -20,6 +20,11 @@ sub _config {
 		# root path
 		'root_path'	=> '/var/backups/mysql',
 		'myscriptname'	=> 'db_backup_runner.pl',
+
+		# database variables
+		'db_host'	=> '', # empty for localhost
+		'db_user'	=> 'root',
+		'db_pass'	=> '', # password if needed
  
 		# system programs
 		'mysqldump'	=> '/usr/bin/mysqldump',
@@ -136,7 +141,10 @@ sub create_backups {
  
 		#print $db ."\n";
 		my $filedate = _convert_unixtime_to_date();
-		my $result = qx~$conf->{'mysqldump'} -u root $db > $conf->{'root_path'}/$db/db_backup.$filedate.sql 2>&1~ if($arg eq "run");
+		my $options;
+		$options = "-h " . $conf->{'db_host'} if($conf->{'db_host'});
+		$options .= '-p' . $conf->{'db_pass'} if($conf->{'db_pass'});
+		my $result = qx~$conf->{'mysqldump'} -u $conf->{'db_user'} $options $db > $conf->{'root_path'}/$db/db_backup.$filedate.sql 2>&1~ if($arg eq "run");
 		next if($result =~ /Got error: 1049/);
 		qx~$conf->{'gzip'} $conf->{'root_path'}/$db/db_backup.$filedate.sql~ if($arg eq "run");
 		if($arg eq "check") {
