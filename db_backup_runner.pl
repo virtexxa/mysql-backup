@@ -38,7 +38,8 @@ sub _config {
 		#},
 	);
 
-	$conf{'keep_days'} = get_custom_config(\%conf);
+	$conf{'keep_days'} = get_custom_config(\%conf, 'keep-days');
+	$conf{'runtime'} = get_custom_config(\%conf, 'runtime');
  
 	return(\%conf);
  
@@ -73,8 +74,12 @@ if($arg ne "run" && $arg ne "check") {
 }
 
 
-my $backup = create_backups(_config());
-my $remove_old_backups = delete_backups(_config());
+# check execution
+
+my @execute_db = check_execute(_config());
+
+my $backup = create_backups(_config(), \@execute_db);
+my $remove_old_backups = delete_backups(_config(), \@execute_db);
 
 print "Backup creation:\n";
 print "================\n\n";
@@ -95,16 +100,39 @@ print "\n" . disk_status(_config()) . "\n";
  
 sub create_backups {
  
-	my $conf = shift;
+	my $conf = $_[0];
+	my @exec_dbs  = @{$_[1]};
 
 	my $output;
  
 	opendir(DIR, "$conf->{'root_path'}");
-	my @dbs = readdir(DIR);
+	my @configured_dbs = readdir(DIR);
 	closedir(DIR);
+
+	# check which dbs to backup
+
+	my @dbs;
+
+	foreach my $confdb (@configured_dbs) {
+		next if($confdb eq "." || $confdb eq ".." || $confdb eq "$conf->{'myscriptname'}" || $confdb eq "_disabled" || $confdb eq "mysql-backup");
+		my $exec_is_configured;
+		foreach my $key (keys %{$conf->{'runtime'}}) {
+			$exec_is_configured = 1 if($key eq "$confdb");
+		}
+		my $run_now = undef;
+		foreach my $execdb (@exec_dbs) {
+			if($exec_is_configured) {
+				$run_now = 1 if($execdb eq "$confdb");
+			} else {
+				$run_now = 1 if($execdb eq "default");
+			}
+		}
+		push @dbs, $confdb if($run_now);
+
+			
+	}
  
 	foreach my $db (@dbs) {
-		next if($db eq "." || $db eq ".." || $db eq "$conf->{'myscriptname'}" || $db eq "_disabled" || $db eq "mysql-backup");
  
 		#print $db ."\n";
 		my $filedate = _convert_unixtime_to_date();
@@ -123,16 +151,38 @@ sub create_backups {
  
 sub delete_backups {
  
-	my $conf = shift;
+	my $conf = $_[0];
+	my @exec_dbs  = @{$_[1]};
 
 	my $output;
  
 	opendir(DIR, "$conf->{'root_path'}");
-        my @dbs = readdir(DIR);
+        my @configured_dbs = readdir(DIR);
         closedir(DIR);
+
+	my @dbs;
+
+        foreach my $confdb (@configured_dbs) {
+                next if($confdb eq "." || $confdb eq ".." || $confdb eq "$conf->{'myscriptname'}" || $confdb eq "_disabled" || $confdb eq "mysql-backup");
+                my $exec_is_configured;
+                foreach my $key (keys %{$conf->{'runtime'}}) {
+                        $exec_is_configured = 1 if($key eq "$confdb");
+                }
+                my $run_now = undef;
+                foreach my $execdb (@exec_dbs) {
+                        if($exec_is_configured) {
+                                $run_now = 1 if($execdb eq "$confdb");
+                        } else {
+                                $run_now = 1 if($execdb eq "default");
+                        }
+                }
+                push @dbs, $confdb if($run_now);
+
+
+        }
+
  
 	foreach my $db (@dbs) {
-		next if($db eq "." || $db eq ".." || $db eq "$conf->{'myscriptname'}" || $db eq "_disabled" || $db eq "mysql-backup");
  
 		my $keep_days = $conf->{'keep_days'}->{'default'};
 		$keep_days = $conf->{'keep_days'}->{$db} if($conf->{'keep_days'}->{$db});
@@ -206,6 +256,7 @@ sub disk_status {
 sub get_custom_config {
 
 	my $config = shift;
+	my $tag    = shift;
 
 	my $pwd = "$config->{'root_path'}/mysql-backup";
 	chomp($pwd);
@@ -214,6 +265,11 @@ sub get_custom_config {
 		open(C, ">$pwd/custom-config") or die "cannot create $pwd/custom-config\n";
 		print C "[keep-days]\n";
 		print C "\n# Databasename Days to keep\n#Example:\n#wordpress   5\n\ndefault   3\n";
+		print C "\n";
+		print C "# configure the time when the backup of a specific database should be executed.\n";
+		print C "# Databasename times\n#Example: wordpress:    09:00,11:00,23:50\n";
+		print C "# multiple times comma seperated, without space!\n\n";
+		print C "[runtime]\ndefault   04:01\n";
 		close(C);
 		print "custom configuration was not found.\n";
 		print "The file custom-config has been created first.\n";
@@ -221,18 +277,59 @@ sub get_custom_config {
 		exit;
 	} else {
 
-		my $custom_config;
+		my ($custom_config, $tag_on);
 		open(C, "<$pwd/custom-config");
 		while (<C>) {
-			next if($_ eq "\n" || $_ =~ /^\#/ || $_ =~ /\[keep\-days\]/);	
-			my ($dbname, $days) = split(/\s+/, $_);
-			chomp($days);
-			$custom_config->{"$dbname"} = $days;
+			next if($_ eq "\n" || $_ =~ /^\#/);	
+			if($_ !~ /[\[\]]/) {
+				my ($dbname, $value) = split(/\s+/, $_);
+				chomp($value);
+				$custom_config->{"$dbname"} = $value if($tag_on);
+				#print "custom_config->{$dbname} = $value\n" if($tag_on);
+			} else {
+				if($_ =~ /\[$tag\]/) {
+					$tag_on = $tag;
+				} else {
+					$tag_on = undef;
+				}
+			}
 		}
 
 		return($custom_config);
 	}
 
+}
+
+sub check_execute {
+
+	my $config = shift;
+
+	my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime();
+        my $exectime =  sprintf("%02d", $hour) . ':' . sprintf("%02d", $min);
+
+	if($arg eq "check") {
+		print "Execution times:\n";
+		print "================\n\n";
+	}
+		
+	my @exec_dbs;
+	foreach my $db (keys %{$config->{'runtime'}}) {
+		my @times = split(",", $config->{'runtime'}->{$db});
+		foreach my $time (@times) {
+			if($arg eq "check") {
+				push @exec_dbs, $db;
+				print"$db will execute at $time -> now: $exectime\n";
+			}
+			if($arg eq "run") {
+				push @exec_dbs, $db if($time eq "$exectime");
+
+			}
+		}
+	}
+
+	print "\n" if($arg eq "check");
+	exit if(!@exec_dbs && $arg eq "run");
+	return(@exec_dbs);
 }
  
 sub _convert_unixtime_to_date {
