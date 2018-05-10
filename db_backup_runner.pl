@@ -63,11 +63,14 @@ if(!$arg) {
         print "To backup a specific database create a directory with the exact name\n";
         print "of the database in the mysql server. You do not need to configure anything else\n";
         print "as long as you use the default values. But you can use different days to keep\n";
-        print "backups. In this case configure in the _config section under 'keep_days'\n";
-        print "how many days you want to keep a backup for a specific database.\n\n";
-        print "To disable a backup create the folder '_disabled' and move the database\n";
-        print "folder into this directory. The database is skipped, even a configuration\n";
-        print "in \$conf->{'keep_days'} exists\n\n";
+        print "backups. In this case configure the file 'custom-config' under '[keep_days]'\n";
+	print "how many days you want to keep a backup for a specific database.\n\n";
+	print "You can also configure the time for each database, when the backup\n";
+	print "should be executed. You configure the execution times in the section\n";
+	print "[runtime] in the file 'custom-config'.\n\n";
+	print "Please configure a cronjob for this script which runs every minute.\n\n";
+        print "To disable a backup move the database folder to the folder '_disabled'.\n";
+        print "The database is skipped, even a configuration exists.\n\n";
         exit;
 }
  
@@ -269,13 +272,20 @@ sub get_custom_config {
 	my $pwd = "$config->{'root_path'}/mysql-backup";
 	chomp($pwd);
 
+	if(!-d "$config->{'root_path'}/_disabled") {
+		mkdir("$config->{'root_path'}/_disabled", 0755) or die "No permissions to create $config->{'root_path'}/_disabled.\nPlease check the permissions of your user.\n";
+	}
+
 	if(!-e "$pwd/custom-config") {
 		open(C, ">$pwd/custom-config") or die "cannot create $pwd/custom-config\n";
+		print C "# Custom configuration file for database backups.\n";
+		print C "# Please do not delete the section tags and do not remove 'default'\n";
+		print C "# This values must exist.\n\n";
 		print C "[keep-days]\n";
 		print C "\n# Databasename Days to keep\n#Example:\n#wordpress   5\n\ndefault   3\n";
 		print C "\n";
 		print C "# configure the time when the backup of a specific database should be executed.\n";
-		print C "# Databasename times\n#Example: wordpress:    09:00,11:00,23:50\n";
+		print C "# Databasename HH:MM\n#Example: wordpress:    09:00,11:00,23:50\n";
 		print C "# multiple times comma seperated, without space!\n\n";
 		print C "[runtime]\ndefault   04:01\n";
 		close(C);
