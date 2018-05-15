@@ -12,13 +12,15 @@ use strict;
 # You can disable backups for specific databases by moving them into the folder "_disabled". 
 # The folder _disabled is ignored.
 # This script must run as root.
+
+use FindBin;
  
 sub _config {
  
 	my %conf = ( 
  
 		# root path
-		'root_path'	=> '/var/backups/mysql',
+		'root_path'	=> "$FindBin::Bin/..",
 		'myscriptname'	=> 'db_backup_runner.pl',
 
 		# database variables
@@ -33,14 +35,6 @@ sub _config {
 		'df'		=> '/bin/df',
 		'mount'		=> 'sda1,root,xvda1', # additional names for mountpoints can be added
  
-		# how long to keep backups // each database who should be backed up must be defined here
-		# keep days are now in an external file "custom-config"
-		#'keep_days'	=> {
-		#	'default'       => 5,
-			#'wordpress'	=> 5, # directory must exist
-			#'databasename2'	=> 2, # directory must exist
-			# for other database values you need to write the name of the database as key and the value in days
-		#},
 	);
 
 	$conf{'keep_days'} = get_custom_config(\%conf, 'keep-days');
@@ -142,12 +136,9 @@ sub create_backups {
  
 	foreach my $db (@dbs) {
  
-		#print $db ."\n";
 		my $filedate = _convert_unixtime_to_date();
 		my $options;
-		$options = "-h " . $conf->{'db_host'} if($conf->{'db_host'});
-		$options .= '-p' . $conf->{'db_pass'} if($conf->{'db_pass'});
-		my $result = qx~$conf->{'mysqldump'} -u $conf->{'db_user'} $options $db > $conf->{'root_path'}/$db/db_backup.$filedate.sql 2>&1~ if($arg eq "run");
+		my $result = qx~$conf->{'mysqldump'} --defaults-extra-file=$conf->{'root_path'}/mysql-backup/custom-config $db > $conf->{'root_path'}/$db/db_backup.$filedate.sql 2>&1~ if($arg eq "run");
 		next if($result =~ /Got error: 1049/);
 		qx~$conf->{'gzip'} $conf->{'root_path'}/$db/db_backup.$filedate.sql~ if($arg eq "run");
 		if($arg eq "check") {
@@ -287,8 +278,13 @@ sub get_custom_config {
 		print C "# configure the time when the backup of a specific database should be executed.\n";
 		print C "# Databasename HH:MM\n#Example: wordpress:    09:00,11:00,23:50\n";
 		print C "# multiple times comma seperated, without space!\n\n";
-		print C "[runtime]\ndefault   04:01\n";
+		print C "[runtime]\ndefault   04:01\n\n";
+		print C "# configure the database access for mysqldump here:\n\n";
+		print C "[mysqldump]\nhost = localhost\nuser = dbuser\npassword = \"\"\n";
 		close(C);
+
+		chmod 0600, "$pwd/custom-config";
+
 		print "custom configuration was not found.\n";
 		print "The file custom-config has been created first.\n";
 		print "Please configure the file, or if you just use the defaults, start the script again.\n";
@@ -303,7 +299,6 @@ sub get_custom_config {
 				my ($dbname, $value) = split(/\s+/, $_);
 				chomp($value);
 				$custom_config->{"$dbname"} = $value if($tag_on);
-				#print "custom_config->{$dbname} = $value\n" if($tag_on);
 			} else {
 				if($_ =~ /\[$tag\]/) {
 					$tag_on = $tag;
