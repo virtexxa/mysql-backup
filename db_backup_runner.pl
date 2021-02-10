@@ -138,7 +138,7 @@ sub create_backups {
  
 		my $filedate = _convert_unixtime_to_date();
 		my $options;
-		my $result = qx~$conf->{'mysqldump'} --single-transaction --quick --skip-lock-tables --defaults-extra-file=$conf->{'root_path'}/mysql-backup/custom-config $db > $conf->{'root_path'}/$db/db_backup.$filedate.sql 2>&1~ if($arg eq "run");
+		my $result = qx~$conf->{'mysqldump'} --defaults-extra-file=$conf->{'root_path'}/mysql-backup/custom-config --skip-lock-tables $db > $conf->{'root_path'}/$db/db_backup.$filedate.sql 2>&1~ if($arg eq "run");
 		next if($result =~ /Got error: 1049/);
 		qx~$conf->{'gzip'} $conf->{'root_path'}/$db/db_backup.$filedate.sql~ if($arg eq "run");
 		if($arg eq "check") {
